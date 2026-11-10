@@ -15,6 +15,8 @@ public class GameManager : NetworkBehaviour {
     public int killsToWin = 10;
     public float matchSeconds = 180f;
     public float countdownSeconds = 3f;
+    public int minPlayers = 2;
+    public int maxPlayers = 5;
 
     public NetworkVariable<MatchState> State = new NetworkVariable<MatchState>(MatchState.Lobby);
     public NetworkVariable<float> TimeLeft = new NetworkVariable<float>(0f);
@@ -25,6 +27,21 @@ public class GameManager : NetworkBehaviour {
 
     void Awake() { Instance = this; }
 
+    void Start() {
+        // Server-side check that rejects a join when the match is full.
+        // Requires "Connection Approval" ticked on the NetworkManager.
+        if (NetworkManager.Singleton != null)
+            NetworkManager.Singleton.ConnectionApprovalCallback = ApprovalCheck;
+    }
+
+    void ApprovalCheck(NetworkManager.ConnectionApprovalRequest request,
+                       NetworkManager.ConnectionApprovalResponse response) {
+        bool full = NetworkManager.Singleton.ConnectedClientsIds.Count >= maxPlayers;
+        response.Approved = !full;
+        response.CreatePlayerObject = !full;
+        if (full) response.Reason = "Match is full";
+    }
+
     public override void OnNetworkSpawn() {
         if (IsServer) NetworkManager.OnClientDisconnectCallback += OnClientLeft; }
 
@@ -34,6 +51,10 @@ public class GameManager : NetworkBehaviour {
     public void StartOrRestartMatch() {
         if (!IsServer) { Debug.LogWarning("Only the host can start the match."); return; }
         if (State.Value == MatchState.Countdown || State.Value == MatchState.Playing) return;
+        if (PlayerState.All.Count < minPlayers) {
+            AnnounceRpc($"Need at least {minPlayers} players");
+            return;
+        }
         StartCoroutine(MatchRoutine());
     }
 
@@ -46,7 +67,15 @@ public class GameManager : NetworkBehaviour {
 
         State.Value = MatchState.Countdown;
         TimeLeft.Value = countdownSeconds;
-        while (TimeLeft.Value > 0) { yield return null; TimeLeft.Value -= Time.deltaTime; }
+        while (TimeLeft.Value > 0) {
+            yield return null;
+            if (PlayerState.All.Count < minPlayers) {
+                State.Value = MatchState.Lobby;
+                AnnounceRpc("Not enough players, countdown cancelled");
+                yield break;
+            }
+            TimeLeft.Value -= Time.deltaTime;
+        }
 
         State.Value = MatchState.Playing;
         TimeLeft.Value = matchSeconds;
@@ -80,7 +109,7 @@ public class GameManager : NetworkBehaviour {
 
     IEnumerator CheckPlayersNextFrame() {
         yield return null;
-        if (State.Value == MatchState.Playing && PlayerState.All.Count < 2)
+        if (State.Value == MatchState.Playing && PlayerState.All.Count < minPlayers)
             ServerEndMatch(Leader());
     }
 
