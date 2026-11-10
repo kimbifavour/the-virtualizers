@@ -113,13 +113,26 @@ public class GameManager : NetworkBehaviour {
             ServerEndMatch(Leader());
     }
 
-    ulong Leader() {
-        var best = PlayerState.All
-            .OrderByDescending(p => p.Kills.Value)
-            .ThenBy(p => p.Deaths.Value)
-            .FirstOrDefault();
-        return best != null ? best.OwnerClientId : NoWinner;
-    }
+ // Single source of truth for ranking: most kills first, then fewest deaths.
+public System.Collections.Generic.List<PlayerState> Ranked() {
+    return PlayerState.All
+        .OrderByDescending(p => p.Kills.Value)
+        .ThenBy(p => p.Deaths.Value)
+        .ToList();
+}
+
+// 1-based rank; players with the same kills and deaths share a rank.
+public int RankOf(PlayerState player) {
+    int better = PlayerState.All.Count(p =>
+        p.Kills.Value > player.Kills.Value ||
+        (p.Kills.Value == player.Kills.Value && p.Deaths.Value < player.Deaths.Value));
+    return better + 1;
+}
+
+ulong Leader() {
+    var best = Ranked().FirstOrDefault();
+    return best != null ? best.OwnerClientId : NoWinner;
+}
 
     PlayerState Find(ulong clientId) => PlayerState.All.FirstOrDefault(p => p.OwnerClientId == clientId);
     public string NameOf(ulong clientId) => Find(clientId)?.DisplayName ?? $"Player {clientId}";
