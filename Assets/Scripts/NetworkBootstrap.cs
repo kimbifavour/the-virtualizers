@@ -6,6 +6,7 @@ using Unity.Services.Authentication;
 using Unity.Services.Core;
 using Unity.Services.Multiplayer;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class NetworkBootstrap : MonoBehaviour {
     public enum Mode {
@@ -66,7 +67,13 @@ public class NetworkBootstrap : MonoBehaviour {
         if (NetworkManager.Singleton.IsListening) return;
         var utp = NetworkManager.Singleton.GetComponent<UnityTransport>();
         utp.SetConnectionData("127.0.0.1", port, "0.0.0.0"); // listen on all network interfaces
-        NetworkManager.Singleton.StartHost();
+        //NetworkManager.Singleton.StartHost();
+        bool started = NetworkManager.Singleton.StartHost();
+
+        Debug.Log(started
+            ? "LAN HOST STARTED SUCCESSFULLY"
+            : "LAN HOST FAILED TO START");
+        //
         Status = $"LAN host on port {port}";
     }
 
@@ -80,4 +87,20 @@ public class NetworkBootstrap : MonoBehaviour {
 
     async void OnApplicationQuit() {
         if (session != null) await session.LeaveAsync(); }
+
+
+    //method to automatically connect to LAN (tirggeting HostLan and JoinLan) using 
+    //unity's new Input System
+    void Update()
+    {
+        if (mode != Mode.Lan) return;
+
+        if (Keyboard.current == null) return;
+
+        if (Keyboard.current.hKey.wasPressedThisFrame)
+            HostLan();
+
+        if (Keyboard.current.jKey.wasPressedThisFrame)
+            JoinLan();
+    }
 }
