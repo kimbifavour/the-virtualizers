@@ -23,10 +23,18 @@ public class Scoreboard : MonoBehaviour {
         var sb = new StringBuilder();
         sb.AppendLine(gm != null && gm.IsSpawned ? gm.StatusLine() : "Not connected");
         sb.AppendLine();
-        foreach (PlayerState p in PlayerState.All.OrderByDescending(p => p.Kills.Value)) {
-            string hex = ColorUtility.ToHtmlStringRGB(p.PlayerColor);
-            sb.AppendLine($"<color=#{hex}>{p.DisplayName}</color>   K {p.Kills.Value}   D {p.Deaths.Value}" + (p.IsAlive.Value ? "" : "   (down)"));
-        }
+
+        if (gm != null) {
+            foreach (PlayerState p in gm.Ranked()) {
+                string hex = ColorUtility.ToHtmlStringRGB(p.PlayerColor);
+                bool isMe = p == PlayerState.Local;
+                string row = $"{gm.RankOf(p)}. <color=#{hex}>{p.DisplayName}</color>   K {p.Kills.Value}   D {p.Deaths.Value}"
+                        + (p.IsAlive.Value ? "" : "   (respawning)")
+                        + (isMe ? "   <b>(YOU)</b>" : "");
+                sb.AppendLine(isMe ? $"<b>{row}</b>" : row);
+    }
+}
+
         sb.AppendLine();
         foreach (string line in feed) sb.AppendLine(line);
         text.text = sb.ToString();
